@@ -12,7 +12,8 @@ AudioInput player;
 
 //Size of winow
 final int[] SIZE = {
-  1680, 1050
+//  1680, 1050
+   2560, 1440
 };
 
 
@@ -41,7 +42,8 @@ PVector pos;
 //Depth thresholds
 float leftThresh = 0;
 float rightThresh = 0;
-float zthresh = 0;
+float frontThresh = 0;
+float backThresh = 9;
 boolean applyLeftThresh = false;
 boolean applyRightThresh = false;
 float MAX_THRESH = 255;
@@ -124,8 +126,11 @@ void initOscControls(){
   msg = new OscMessage("/1/size");
   msg.add(scal);
   oscP5.send(msg, sendLoc);
-  msg = new OscMessage("/1/thresh");
-  msg.add(zthresh);
+  msg = new OscMessage("/1/frontThresh");
+  msg.add(frontThresh);
+  oscP5.send(msg, sendLoc);
+  msg = new OscMessage("/1/backThresh");
+  msg.add(backThresh);
   oscP5.send(msg, sendLoc);
   msg = new OscMessage("/1/size");
   msg.add(scal);
@@ -156,9 +161,13 @@ void oscEvent(OscMessage theOscMessage) {
 
   String addr = theOscMessage.addrPattern();
   
-  if (addr.equals("/1/thresh")){
+  if (addr.equals("/1/frontThresh")){
     float  val  = theOscMessage.get(0).floatValue();
-    zthresh = val;//map(val, 0, 1, -600, 600);
+    frontThresh = val;//map(val, 0, 1, -600, 600);
+  }
+  if (addr.equals("/1/backThresh")){
+    float  val  = theOscMessage.get(0).floatValue();
+    backThresh = val;//map(val, 0, 1, -600, 600);
   }
   if (addr.equals("/2/audioFactor")) {
     float  val  = theOscMessage.get(0).floatValue();
@@ -206,7 +215,8 @@ void oscEvent(OscMessage theOscMessage) {
       x0 = 0;
       tran = tran0;
       audioFactor = 1;
-      zthresh = 0;
+      frontThresh = 0;
+      backThresh = 9;
       initOscControls();
     }
   }
@@ -333,29 +343,34 @@ void draw() {
       mapLC = mapRC = 0;  
       mapRC = map(rightChannel, 0, audioFactor/2, 0,255);
       mapLC = map(leftChannel, 0, audioFactor/2, 0, 255);
-//      if(rawDepth > maxLC){
-//        maxLC = rawDepth;
+//      if(v.z > maxLC){
+//        maxLC = v.z;
 //        println("new max: "+maxLC);
 //      }
       float r , g, b, z;
       // Do the right channel
-      r = 125;//rThresh - mapRC;
-      g = 125;//gThresh - mapRC * 2;
-      b = (int) map(rawDepth, 0, 2048, 0 , 255);
+      int upperColor = (int)map(backThresh, 0, 8, 0, 255);
+      int lowerColor = (int)map(frontThresh, 0, 8, 0, 255);
+      r = (int) map(v.z, 2, 5, upperColor , lowerColor);//rThresh - mapRC;
+      g = gThresh - mapRC;
+      b = bThresh - (int) map(v.z, 2, 5, lowerColor, upperColor);
       rawDepth *= 2;
       z = rawDepth;// * rightChannel * audioFactor;  
       shapeMode(CENTER);
       beginShape(POINT);
-      if(isColor)
+      strokeWeight(3);
+      if(isColor){
         stroke(r, g, b);
+      }
       else
         stroke(r);
-//        if(z > zthresh || z < -1*zthresh)
-          vertex(v.x*factor, v.y*factor, 3000 - z);
+      if(v.z < backThresh && v.z > frontThresh)// || z < -1*zthresh)
+        vertex(v.x*factor, v.y*factor, 3000 - z);
       endShape(CLOSE);
+      noFill();
       // Do the left channel
-      r = rThresh * (leftChannel + 1);
-      g = gThresh * (leftChannel + 1);
+      r = rThresh - mapRC - mapLC;
+      g = gThresh + mapLC;
       b = bThresh - mapLC;
       z = rawDepth + (rawDepth * (leftChannel * audioFactor));
       int[] circ  = new int[3];
@@ -366,7 +381,7 @@ void draw() {
       circ[2] = (int) (radius * sin(theta));
       shapeMode(CENTER);
       beginShape(POINT);
-      strokeJoin(BEVEL);
+      strokeWeight(10);
       if(isColor)
         stroke(r, g, b);
       else
